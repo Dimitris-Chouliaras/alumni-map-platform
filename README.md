@@ -16,7 +16,4 @@
 - Πλήρες CRUD για την επαγγελματική κατάσταση του αποφοίτου.
 
 ## 📸 Screenshots
-
-| Αναζήτηση & Χάρτης | Στατιστικά (Charts) |
-|---|---|
-|screenshots/6th.png)
+<img width="1915" height="1038" alt="6th" src="https://github.com/user-attachments/assets/3437be73-54be-4ebf-b24a-b054e4e0fa79" />
