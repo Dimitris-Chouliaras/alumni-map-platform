@@ -1,0 +1,96 @@
+/* -------------------- Γενικό Στυλ -------------------- */
+body {
+    background-color: #f1f5f9;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    overflow-x: hidden; /* Αποφυγή οριζόντιου scroll */
+}
+
+/* -------------------- Navbar [Gradient background από σκούρο μπλε προς ανοιχτό μπλε] -------------------- */
+#mainNavbar {
+    background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+    padding: 12px 20px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+/* -------------------- ΚΥΡΙΟ LAYOUT - Αριστερό Panel + Χάρτης -------------------- */
+/* Επιβάλλει στις δύο στήλες να έχουν το ίδιο ύψος ΠΑΝΤΑ */
+.main-layout-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch; /* Κλειδί για ίσο ύψος στήλων */
+}
+
+/* Αριστερή στήλη - cards στοιβαγμένα κάθετα */
+.left-panel-scroll {
+    display: flex;
+    flex-direction: column;
+    gap: 10px; /* Μικρό κενό ανάμεσα στα cards */
+}
+
+/* Χάρτης - γεμίζει δυναμικά όλο το διαθέσιμο ύψος */
+#map {
+    width: 100%;
+    height: 100%;       /* Γεμίζει όλο το ύψος της στήλης */
+    min-height: 600px;  /* Ελάχιστο ύψος για να μην εξαφανίζεται */
+    border-radius: 15px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1) !important;
+}
+
+/* -------------------- CARDS - Κάρτες του αριστερού panel και των modals ------------------------------ */
+.side-card {
+    border: none !important;
+    border-radius: 15px !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08) !important;
+    background-color: white;
+    margin-bottom: 15px;
+}
+
+/* ------------------------------ ΣΤΑΤΙΣΤΙΚΑ - Εμφάνιση πλήθους αποφοίτων ------------------------------ */
+/* Label πάνω από τον αριθμό */
+.stat-label {
+    font-size: 0.75rem;
+    color: #64748b;
+    text-transform: uppercase;
+    font-weight: bold;
+    display: block;
+    margin-bottom: 5px;
+}
+
+/* Ο μεγάλος αριθμός αποφοίτων */
+#alumniCount {
+    color: #1e40af;
+    font-size: 2.5rem;
+    font-weight: 800;
+    margin: 0;
+}
+
+/* ------------------------------ GOOGLE CHART - Σταθερό μέγεθος για να μην ξεχειλίζει έξω από την κάρτα ------------------------------ */
+#chart_div {
+    width: 100% !important;
+    height: 250px !important;
+}
+
+/* ------------------------------ INPUT GROUP - Πεδία κωδικού με κουμπί εμφάνισης (👁️) ------------------------------ */
+.input-group .btn {
+    border-top-right-radius: 15px !important;
+    border-bottom-right-radius: 15px !important;
+    border-left: none;
+    background-color: #fff;
+    color: #64748b;
+}
+
+.input-group .form-control {
+    border-right: none; /* Κρύβει το διπλό border μεταξύ input και κουμπιού */
+}
+
+/* ------------------------------ RESPONSIVE - Προσαρμογές για κινητά (max-width: 768px) ------------------------------ */
+@media (max-width: 768px) {
+    .left-panel-scroll {
+        max-height: none; /* Στα κινητά τα στοιχεία μπαίνουν το ένα κάτω από το άλλο */
+        overflow-y: visible;
+    }
+    #map {
+        height: 400px; /* Μικρότερος χάρτης για να μην σκρολάρει ο χρήστης αιώνια */
+        min-height: 400px;
+    }
+}

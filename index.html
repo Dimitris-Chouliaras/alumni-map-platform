@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Σύστημα Αποφοίτων - ΠΘ</title>
+    <!-- Bootstrap CSS - UI Framework -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- ================================================== NAVBAR ================================================== -->
+    <!-- ==================== Εμφανίζει διαφορετικές επιλογές ανάλογα με την κατάσταση σύνδεσης ===================== -->
+    <nav class="navbar navbar-dark shadow-sm" id="mainNavbar">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="#">ΠΜΣ - Αποφοίτοι</a>
+            <div class="d-flex align-items-center gap-3">
+
+                <!-- Ζώνη Επισκέπτη (Guest) - Κουμπιά Εγγραφής / Εισόδου -->
+                <div id="guestZone" class="d-flex gap-2">
+                    <button class="btn btn-outline-light btn-sm" data-bs-toggle="modal" data-bs-target="#registerModal">Εγγραφή</button>
+                    <button class="btn btn-light btn-sm text-primary fw-bold" data-bs-toggle="modal" data-bs-target="#loginModal">Είσοδος</button>
+                </div>
+
+                <!-- Ζώνη Χρήστη (User) - Εμφανίζεται μετά το login -->
+                <div id="userZone" class="d-none d-flex align-items-center gap-2 text-white">
+                    <!-- Κουμπί διαχείρισης εργασίας - φορτώνει τα υπάρχοντα δεδομένα -->
+                    <button class="btn btn-warning btn-sm fw-bold shadow-sm text-dark" data-bs-toggle="modal" data-bs-target="#jobModal" onclick="loadMyJobData()">Η Εργασία μου</button>
+                    <!-- Εμφάνιση ονόματος συνδεδεμένου χρήστη -->
+                    <div class="d-flex align-items-center bg-white bg-opacity-25 rounded-pill px-3 py-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-person-circle me-2" viewBox="0 0 16 16">
+                            <path d="M11 6a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"/>
+                            <path fill-rule="evenodd" d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8zm8-7a7 7 0 0 0-5.468 11.37C3.242 11.226 4.805 10 8 10s4.757 1.225 5.468 2.37A7 7 0 0 0 8 1z"/>
+                        </svg>
+                        <span id="userNameDisplay" class="small fw-bold"></span>
+                    </div>
+                    <!-- Κουμπί Αποσύνδεσης -->
+                    <button class="btn btn-danger btn-sm fw-bold shadow-sm" onclick="handleLogout()">Έξοδος</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+    <!-- ==================================================== ΤΕΛΟΣ NAVBAR ==================================================== -->
+
+    <!-- ======================================= ΚΥΡΙΟ LAYOUT - Αριστερό Panel + Χάρτης ======================================= -->
+    <div class="container-fluid mt-3 mb-4">
+        <div class="row g-3 main-layout-row">
+            <!-- ΑΡΙΣΤΕΡΟ PANEL - Φίλτρα, Στατιστικά, Γράφημα -->
+            <div class="col-12 col-md-5 col-lg-3 left-panel-scroll">
+                <!-- Κάρτα Φίλτρων Αναζήτησης -->
+                <div class="card side-card mb-3">
+                    <div class="card-body">
+                        <h5 class="card-title mb-3">Φίλτρα Αναζήτησης</h5>
+                        <!-- Φίλτρο Επωνύμου -->
+                        <input type="text" id="searchName" class="form-control mb-2" placeholder="Επώνυμο...">
+                        <!-- Φίλτρο Πόλης Εργασίας (δυναμικά από API) -->
+                        <select id="searchCity" class="form-select mb-2">
+                            <option value="">Όλες οι πόλεις</option>
+                        </select>
+                        <!-- Φίλτρο Έτους Εισαγωγής -->
+                        <input type="number" id="searchEntryYear" class="form-control mb-2" placeholder="Έτος Εισαγωγής...">
+                        <!-- Φίλτρο Έτους Αποφοίτησης -->
+                        <input type="number" id="searchGradYear" class="form-control mb-2" placeholder="Έτος Αποφοίτησης...">
+                        <!-- Φίλτρο Χώρας -->
+                        <input type="text" id="searchCountry" class="form-control mb-3" placeholder="Χώρα...">
+                        <!-- Κουμπιά Αναζήτησης / Καθαρισμού -->
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-primary w-100" onclick="searchAlumni(1)">Αναζήτηση</button>
+                            <button class="btn btn-outline-secondary" onclick="clearSearch()">Clear</button>
+                        </div>
+                        <!-- Pagination Controls (κρυφό αρχικά, εμφανίζεται μετά την αναζήτηση) -->
+                        <div id="pagination-controls" class="d-flex justify-content-between mt-3 d-none">
+                            <button class="btn btn-sm btn-light border" id="btnPrev" onclick="changePage(-1)">←</button>
+                            <span id="pageInfo" class="align-self-center small fw-bold"></span>
+                            <button class="btn btn-sm btn-light border" id="btnNext" onclick="changePage(1)">→</button>
+                        </div>
+                    </div>
+                </div>
+                <!-- Τέλος Κάρτα Φίλτρων Αναζήτησης -->
+                <!-- Κάρτα Στατιστικού - Συνολικός αριθμός αποφοίτων -->
+                <div class="card side-card mb-3 text-center">
+                    <div class="card-body">
+                        <span class="stat-label">Συνολικοί Απόφοιτοι</span>
+                        <h4 id="alumniCount">--</h4>
+                    </div>
+                </div>
+                <!-- Τέλος Κάρτα Στατιστικού - Συνολικός αριθμός αποφοίτων -->
+                <!-- Κάρτα Google Chart - Κατανομή αποφοίτων ανά πόλη -->
+                <div class="card side-card mb-3">
+                    <div class="card-body p-1">
+                        <h6 class="card-title text-center mt-2 mb-0">Αποφοίτοι ανά Πόλη</h6>
+                        <div id="chart_div"></div>
+                    </div>
+                </div>
+                <!-- Τέλος Κάρτα Google Chart - Κατανομή αποφοίτων ανά πόλη -->
+            </div>
+            <!-- ΤΕΛΟΣ ΑΡΙΣΤΕΡΟ PANEL - Φίλτρα, Στατιστικά, Γράφημα -->
+            <!-- ΔΕΞΙ PANEL - Google Maps (Γεμίζει όλο το διαθέσιμο ύψος της σελίδας) -->
+            <div class="col-12 col-md-7 col-lg-9 d-flex align-items-stretch">
+                <div id="map" class="shadow-sm w-100"></div>
+            </div>
+        </div>
+    </div>
+    <!-- ==================================== ΤΕΛΟΣ ΚΥΡΙΟ LAYOUT - Αριστερό Panel + Χάρτης =================================== -->
+
+    <!-- ================= MODAL #1 - Σύνδεση Χρήστη (Login) - Εμφανίζεται όταν ο χρήστης πατήσει "Είσοδος" ================== -->
+    <div class="modal fade" id="loginModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content side-card">
+                <div class="modal-header border-0">
+                    <h5 class="modal-title fw-bold">Σύνδεση Διαχειριστή</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Πεδίο Email -->
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Username</label>
+                        <input type="text" id="loginUser" class="form-control" placeholder="π.χ. email@uth.gr">
+                    </div>
+                    <!-- Πεδίο Κωδικού με toggle εμφάνισης -->
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Password</label>
+                        <div class="input-group">
+                            <input type="password" id="loginPass" class="form-control" placeholder="******">
+                            <button class="btn btn-outline-secondary" type="button" onclick="togglePassword('loginPass', this)">
+                                <i class="bi bi-eye">👁️</i>
+                            </button>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary w-100 py-2 shadow-sm" onclick="handleLogin()">Είσοδος</button>
+                    <!-- Μήνυμα σφάλματος (κρυφό αρχικά) -->
+                    <div id="loginError" class="text-danger small mt-2 text-center d-none"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- ============== ΤΕΛΟΣ MODAL #1 - Σύνδεση Χρήστη (Login) - Εμφανίζεται όταν ο χρήστης πατήσει "Είσοδος" =============== -->
+
+    <!-- ============ MODAL #2 - Εγγραφή Νέου Αποφοίτου (Register) - Εμφανίζεται όταν ο χρήστης πατήσει "Εγγραφή" ============ -->
+    <div class="modal fade" id="registerModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content side-card">
+                <div class="modal-header border-0">
+                    <h5 class="modal-title fw-bold">Εγγραφή Νέου Αποφοίτου</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- onsubmit καλεί handleRegister() για AJAX υποβολή (χωρίς page refresh) -->
+                    <form id="registerForm" onsubmit="handleRegister(event)">
+                        <!-- Όνομα & Επώνυμο -->
+                        <div class="row g-2">
+                            <div class="col-md-6"><input type="text" id="regFirstname" class="form-control mb-2" placeholder="Όνομα" required></div>
+                            <div class="col-md-6"><input type="text" id="regLastname" class="form-control mb-2" placeholder="Επώνυμο" required></div>
+                        </div>
+                        <!-- Email -->
+                        <input type="email" id="regEmail" class="form-control mb-2" placeholder="Email" required>
+                        <!-- Κωδικός με toggle εμφάνισης -->
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Κωδικός</label>
+                            <div class="input-group">
+                                <input type="password" id="regPass" class="form-control" placeholder="Κωδικός" required>
+                                <button class="btn btn-outline-secondary" type="button" onclick="togglePassword('regPass', this)">
+                                    <i class="bi bi-eye">👁️</i>
+                                </button>
+                            </div>
+                        </div>
+                        <!-- Έτη Εισαγωγής & Αποφοίτησης -->
+                        <div class="row g-2">
+                            <div class="col-md-6"><input type="number" id="regEntryYear" class="form-control mb-2" placeholder="Έτος Εισαγωγής" required></div>
+                            <div class="col-md-6"><input type="number" id="regGradYear" class="form-control mb-2" placeholder="Έτος Αποφοίτησης" required></div>
+                        </div>
+                        <!-- Χώρα & Πόλη Κατοικίας -->
+                        <div class="row g-2">
+                            <div class="col-md-6"><input type="text" id="regCountry" class="form-control mb-2" placeholder="Χώρα"></div>
+                            <div class="col-md-6"><input type="text" id="regCity" class="form-control mb-2" placeholder="Πόλη Κατοικίας"></div>
+                        </div>
+                        <!-- Κουμπί για το Submit -->
+                        <button type="submit" class="btn btn-success w-100 mt-2 fw-bold">Ολοκλήρωση Εγγραφής</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- ========= ΤΕΛΟΣ MODAL #2 - Εγγραφή Νέου Αποφοίτου (Register) - Εμφανίζεται όταν ο χρήστης πατήσει "Εγγραφή" ========= -->
+
+    <!-- ======= MODAL #3 - Διαχείριση Εργασίας (Job) - Εμφανίζεται όταν ο συνδεδεμένος χρήστης πατήσει "Η Εργασία μου" ====== -->
+    <div class="modal fade" id="jobModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content side-card">
+                <div class="modal-header border-0">
+                    <h5 class="modal-title fw-bold">Διαχείριση Εργασίας</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Εταιρία -->
+                    <label class="small fw-bold text-secondary uppercase">Εταιρία</label>
+                    <input type="text" id="jobCompany" class="form-control mb-2" placeholder="π.χ. Deloitte">
+                    <!-- Τίτλος Θέσης -->
+                    <label class="small fw-bold text-secondary uppercase">Τίτλος Θέσης</label>
+                    <input type="text" id="jobTitle" class="form-control mb-2" placeholder="π.χ. Senior Developer">
+                    <!-- Πόλη Εργασίας -->
+                    <label class="small fw-bold text-secondary uppercase">Πόλη</label>
+                    <input type="text" id="jobCity" class="form-control mb-2" placeholder="π.χ. Θεσσαλονίκη">
+                    <!-- Συντεταγμένες για τοποθέτηση στον χάρτη -->
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <label class="small fw-bold text-secondary uppercase">Latitude</label>
+                            <input type="text" id="jobLat" class="form-control" placeholder="40.6401">
+                        </div>
+                        <div class="col-6">
+                            <label class="small fw-bold text-secondary uppercase">Longitude</label>
+                            <input type="text" id="jobLng" class="form-control" placeholder="22.9444">
+                        </div>
+                    </div>
+                    <p class="text-muted mb-0" style="font-size: 0.7rem;">* Βρείτε τις συντεταγμένες από το Google Maps (δεξί κλικ στο σημείο).</p>
+                    <!-- Κουμπιά Αποθήκευσης / Διαγραφής -->
+                    <div class="d-flex gap-2 mt-3">
+                        <button class="btn btn-primary w-100 fw-bold shadow-sm" onclick="saveJob()">Αποθήκευση Εργασίας</button>
+                        <!-- Κουμπί Διαγραφής - εμφανίζεται μόνο αν υπάρχει ήδη εργασία -->
+                        <button id="btnDeleteJob" class="btn btn-outline-danger d-none" onclick="deleteJob()">Διαγραφή</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- ==== ΤΕΛΟΣ MODAL #3 - Διαχείριση Εργασίας (Job) - Εμφανίζεται όταν ο συνδεδεμένος χρήστης πατήσει "Η Εργασία μου" ==== -->
+
+    <!-- Bootstrap JS - Απαραίτητο για τα modals -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Google Charts - Για το γράφημα κατανομής -->
+    <script src="https://www.gstatic.com/charts/loader.js"></script>
+    <!-- Google Maps API - callback=initMap καλεί την initMap() από το app.js -->
+    <script src="https://maps.googleapis.com/maps/api/js?loading=async&libraries=marker,places&key=AIzaSyBF5zJ0r8xRKoT0dwSg_Q-q1QD1O4UY86o&callback=initMap"></script>
+    <!-- OverlappingMarkerSpiderfier - Διαχείριση δεικτών που συμπίπτουν ή βρίσκονται πολύ κοντά μεταξύ τους στον χάρτη -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/OverlappingMarkerSpiderfier/1.0.3/oms.min.js"></script>
+    <!-- Custom JavaScript -->
+    <script src="app.js"></script>
+</body>
+</html>
