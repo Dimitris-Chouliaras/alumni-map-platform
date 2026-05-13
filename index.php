@@ -57,6 +57,53 @@ $app->add(function (Request $request, $handler) {
         ->withHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
         ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
 });
+
+$jwt_secret = "YOUR_SUPER_SECRET_GOD_ALMIGHTY_KEY_123";
+
+$authMiddleware = function (Request $request, $handler) use ($jwt_secret) {
+    $auth  = $request->getHeaderLine('Authorization');
+    $token = str_replace('Bearer ', '', $auth);
+
+    try {
+        $decoded = JWT::decode($token, new \Firebase\JWT\Key($jwt_secret, 'HS256'));
+        
+        // --- ΕΛΕΓΧΟΣ ΓΙΑ ΑΝΑΝΕΩΣΗ (Token Renewal) ---
+        $currentTime = time();
+        $expireTime = $decoded->exp;
+        $timeLeft = $expireTime - $currentTime;
+
+        // Αν απομένουν λιγότερα από 10 λεπτά (600 δευτερόλεπτα)
+        if ($timeLeft > 0 && $timeLeft < 600) {
+            $newPayload = [
+                'iat' => $currentTime,
+                'exp' => $currentTime + (3600 * 1), // Παράταση για 1 ώρα ακόμα
+                'sub' => $decoded->sub,
+                'email' => $decoded->email
+            ];
+            
+            // Αποθηκεύουμε το νέο token στο request για να το προσθέσουμε μετά στο response
+            $newToken = JWT::encode($newPayload, $jwt_secret, 'HS256');
+            $request = $request->withAttribute('new_token', $newToken);
+        }
+        // --------------------------------------------
+
+        $request = $request->withAttribute('decoded_token', $decoded);
+        $response = $handler->handle($request);
+
+        // Αν δημιουργήθηκε νέο token, το βάζουμε στο header της απάντησης
+        if ($request->getAttribute('new_token')) {
+            $response = $response->withHeader('X-New-Token', $request->getAttribute('new_token'))
+                                 ->withHeader('Access-Control-Expose-Headers', 'X-New-Token');
+        }
+
+        return $response;
+
+    } catch (Exception $e) {
+        $response = new \Slim\Psr7\Response();
+        $response->getBody()->write(json_encode(["error" => "Unauthorized: " . $e->getMessage()]));
+        return $response->withStatus(401)->withHeader('Content-Type', 'application/json')->withHeader('Access-Control-Allow-Origin', '*');
+    }
+};
 /* ============================== ROUTE: Αρχική Σελίδα - Σερβίρει το index.html (το frontend της εφαρμογής) ============================== */
 $app->get('/', function (Request $request, Response $response) {
     $html = file_get_contents('index.html');
@@ -102,8 +149,6 @@ $app->post('/api/v1/alumni', function (Request $request, Response $response) use
 });
 /* ============================== ROUTE #2: Σύνδεση Χρήστη (Login) & Έκδοση JWT Token - POST /api/v1/login ============================== */
 // Μυστικό κλειδί για υπογραφή/επαλήθευση JWT tokens
-$jwt_secret = "YOUR_SUPER_SECRET_GOD_ALMIGHTY_KEY_123"; // Κλειδί κρυπτογράφησης
-
 $app->post('/api/v1/login', function (Request $request, Response $response) use ($conn, $jwt_secret) {
     $data = $request->getParsedBody();
     $email = $data['email'] ?? ''; 
@@ -145,12 +190,12 @@ $app->post('/api/v1/login', function (Request $request, Response $response) use 
     return $response->withStatus(401)->withHeader('Content-Type', 'application/json');
 });
 /* ============================== ROUTE #3: Πλήθος Αποφοίτων - GET /api/v1/alumni/count ============================== */
-$app->get('/api/v1/alumni/count', function (Request $request, Response $response) use ($conn) {
-    $stmt = $conn->prepare("SELECT COUNT(*) as total FROM alumni");
-    $stmt->execute();
-    $count = $stmt->fetch(PDO::FETCH_ASSOC);
-    $response->getBody()->write(json_encode($count));
-    return $response->withHeader('Content-Type', 'application/json');
+$app->get('/api/v1/alumni/count', function (Request $request, Response $response) use ($conn) { // Ορισμός ενός GET endpoint (Slim Framework)
+    $stmt = $conn->prepare("SELECT COUNT(*) as total FROM alumni"); // Προετοιμασία του SQL ερωτήματος για την καταμέτρηση όλων των εγγραφών από τον πίνακα alumni
+    $stmt->execute(); // Εκτέλεση του ερωτήματος στη βάση δεδομένων
+    $count = $stmt->fetch(PDO::FETCH_ASSOC); // Ανάκτηση του αποτελέσματος ως συσχετιστικό πίνακα (associative array)
+    $response->getBody()->write(json_encode($count)); // Εγγραφή του αποτελέσματος στο σώμα της απάντησης σε μορφή JSON
+    return $response->withHeader('Content-Type', 'application/json'); // Επιστροφή της απάντησης με την προσθήκη του κατάλληλου HTTP Header για περιεχόμενο JSON
 });
 /* ============================== ROUTE #4: Εργασίες Συγκεκριμένου Αποφοίτου - GET /api/v1/alumni/{id}/jobs ============================== */
 $app->get('/api/v1/alumni/{id}/jobs', function (Request $request, Response $response, array $args) use ($conn) {
@@ -177,14 +222,13 @@ $app->get('/api/v1/alumni', function (Request $request, Response $response) use 
     return $response->withHeader('Content-Type', 'application/json');
 });
 /* ============================== ROUTE #6: Διαγραφή Εργασίας (Protected) - DELETE /api/v1/jobs ============================== */
-$app->delete('/api/v1/jobs', function (Request $request, Response $response) use ($conn, $jwt_secret) {
-    $auth = $request->getHeaderLine('Authorization');
-    $token = str_replace('Bearer ', '', $auth);
+$app->delete('/api/v1/jobs', function (Request $request, Response $response) use ($conn) {
+    
+    // Παίρνουμε το έτοιμο userId από το Middleware';
+    $decoded = $request->getAttribute('decoded_token');
+    $userId = $decoded->sub;
     
     try {
-        $decoded = JWT::decode($token, new \Firebase\JWT\Key($jwt_secret, 'HS256'));
-        $userId = $decoded->sub;
-
         // Έλεγχος αν υπάρχει όντως η εγγραφή πριν τη διαγραφή
         $check = $conn->prepare("SELECT job_id FROM jobs WHERE alumni_id = ?");
         $check->execute([$userId]);
@@ -200,20 +244,20 @@ $app->delete('/api/v1/jobs', function (Request $request, Response $response) use
         $response->getBody()->write(json_encode(["status" => "success"]));
         return $response->withHeader('Content-Type', 'application/json');
     } catch (Exception $e) {
-        return $response->withStatus(401);
+        return $response->withStatus(500);
     }
-});
+})->add($authMiddleware);
 /* ============================== ROUTE #7: Προσθήκη / Ενημέρωση Εργασίας (Protected) - PUT /api/v1/jobs ============================== */
-$app->put('/api/v1/jobs', function (Request $request, Response $response) use ($conn, $jwt_secret) {
-    $auth = $request->getHeaderLine('Authorization');
-    $token = str_replace('Bearer ', '', $auth);
+$app->put('/api/v1/jobs', function (Request $request, Response $response) use ($conn) {
+    
+    // 1. Παίρνουμε το έτοιμο userId από το Middleware
+    $decoded = $request->getAttribute('decoded_token');
+    $userId = $decoded->sub;
+
+    // 2. Παίρνουμε τα δεδομένα από το request body
+    $data = $request->getParsedBody();
 
     try {
-        // Χρήση της κλάσης Key για την αποκωδικοποίηση
-        $decoded = JWT::decode($token, new \Firebase\JWT\Key($jwt_secret, 'HS256'));
-        $userId = $decoded->sub; // Το ID του χρήστη από το Token
-        $data = $request->getParsedBody();
-
         // Έλεγχος αν υπάρχει ήδη εργασία για αυτόν τον απόφοιτο
         $stmt = $conn->prepare("SELECT job_id FROM jobs WHERE alumni_id = ?");
         $stmt->execute([$userId]);
@@ -231,10 +275,10 @@ $app->put('/api/v1/jobs', function (Request $request, Response $response) use ($
         return $response->withHeader('Content-Type', 'application/json');
 
     } catch (Exception $e) { // Αποτυχία επαλήθευσης token (ληγμένο, λάθος υπογραφή κλπ)
-        $response->getBody()->write(json_encode(["error" => $e->getMessage()]));
-        return $response->withStatus(401)->withHeader('Content-Type', 'application/json');
+        $response->getBody()->write(json_encode(["error" => "Database error: " . $e->getMessage()]));
+        return $response->withStatus(500)->withHeader('Content-Type', 'application/json');
     }
-});
+})->add($authMiddleware);
 /* ============================== ROUTE #8: Αναζήτηση Αποφοίτων με Φίλτρα & Σελιδοποίηση - GET /api/v1/search ============================== */
 $app->get('/api/v1/search', function (Request $request, Response $response) use ($conn) {
     $params = $request->getQueryParams();
@@ -265,8 +309,8 @@ $app->get('/api/v1/search', function (Request $request, Response $response) use 
 
     // Αν δεν υπάρχει κανένα φίλτρο, επιστρέφουμε όλους χωρίς pagination
     $isSearchEmpty = empty($lastname) && empty($city) && empty($entry_year) && empty($grad_year) && empty($country);
-    $currentLimit = $isSearchEmpty ? $totalRecords : $limit;
-    $totalPages = $isSearchEmpty ? 1 : ceil($totalRecords / $limit);
+    $currentLimit = $isSearchEmpty ? $totalRecords : $limit; // το current limit γίνεται ίσο με το πληθος των απόφοιτων
+    $totalPages = $isSearchEmpty ? 1 : ceil($totalRecords / $limit); // τώρα κάνουμε συγκεκριμένη αναζήτηση, οπότε ενεργοποιώ τη σελιδοποίηση
 
     // --- Βήμα 2: Λήψη αποτελεσμάτων με τα ίδια φίλτρα ---
     $sql = "SELECT a.*, j.company_name, j.job_title, j.city as job_city, j.lat, j.lng 
@@ -293,7 +337,7 @@ $app->get('/api/v1/search', function (Request $request, Response $response) use 
     ];
     
     // --- Βήμα 3: Επιστροφή σε XML ή JSON ανάλογα με το ?format ---
-    if (strtolower($format) === 'xml') {
+    if (strtolower($format) === 'xml') { // Επιστρέφει XML
     // Κατασκευή XML response με SimpleXML
     $xml = new SimpleXMLElement('<results/>');
     $pag = $xml->addChild('pagination');
@@ -312,22 +356,18 @@ $app->get('/api/v1/search', function (Request $request, Response $response) use 
     
     $response->getBody()->write($xml->asXML());
     return $response->withHeader('Content-Type', 'application/xml');
-} else { // Προεπιλογή: JSON response
+} else { // Επιστρέφει JSON (default)
     $response->getBody()->write(json_encode($output, JSON_UNESCAPED_UNICODE));
     return $response->withHeader('Content-Type', 'application/json');
 }
 });
 /* ============================== ROUTE: Εργασία Συνδεδεμένου Χρήστη (Protected) - GET /api/v1/jobs/myjob ============================== */
-$app->get('/api/v1/jobs/myjob', function (Request $request, Response $response) use ($conn, $jwt_secret) {
-    // Παίρνουμε το Token από το Authorization Header
-    $auth = $request->getHeaderLine('Authorization');
-    $token = str_replace('Bearer ', '', $auth);
+$app->get('/api/v1/jobs/myjob', function (Request $request, Response $response) use ($conn) {
+    // Παίρνουμε το ήδη ελεγμένο userId από το Middleware
+    $decoded = $request->getAttribute('decoded_token');
+    $userId = $decoded->sub;
     
-    try { // Αποκωδικοποίηση JWT για να βρούμε το ID του απόφοιτου
-        $decoded = JWT::decode($token, new \Firebase\JWT\Key($jwt_secret, 'HS256'));
-        $userId = $decoded->sub;
-
-        // Αναζήτηση εργασίας στην βάση με βάση το alumni_id
+    try { // Αναζήτηση εργασίας στην βάση με βάση το alumni_id
         $stmt = $conn->prepare("SELECT * FROM jobs WHERE alumni_id = ?");
         $stmt->execute([$userId]);
         $job = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -336,9 +376,9 @@ $app->get('/api/v1/jobs/myjob', function (Request $request, Response $response) 
         $response->getBody()->write(json_encode($job));
         return $response->withHeader('Content-Type', 'application/json');
     } catch (Exception $e) {
-        return $response->withStatus(401);
+        return $response->withStatus(500);
     }
-});
+})->add($authMiddleware);
 /* ============================== ROUTE: Δυναμική Λήψη Πόλεων - GET /api/v1/cities ============================== */
 $app->get('/api/v1/cities', function (Request $request, Response $response) use ($conn) {
     $stmt = $conn->prepare("SELECT DISTINCT city FROM jobs WHERE city != '' ORDER BY city ASC");

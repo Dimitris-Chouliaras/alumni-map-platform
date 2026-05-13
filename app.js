@@ -47,6 +47,36 @@ async function initMap() {
     loadAlumniCount();
     checkAuthStatus();
 }
+
+// Κεντρική συνάρτηση για όλα τα fetch που απαιτούν Authorization
+async function authorizedFetch(url, options = {}) {
+    const token = localStorage.getItem('adminToken');
+
+    if (token) {
+        options.headers = {
+            ...options.headers,
+            'Authorization': 'Bearer ' + token
+        };
+    }
+
+    const response = await fetch(url, options);
+
+    // 1. SILENT REFRESH
+    const newToken = response.headers.get('X-New-Token');
+    if (newToken) {
+        localStorage.setItem('adminToken', newToken);
+        console.log("Το token ανανεώθηκε αυτόματα!");
+    }
+
+    // 2. AUTO LOGOUT - ΠΡΟΣΕΞΕ ΤΗ ΣΕΙΡΑ ΕΔΩ:
+    if (response.status === 401) {
+        console.log("401 detected - triggering logout");
+        handleLogout(); // Αυτό πρέπει να τρέξει οπωσδήποτε
+        return response; // Επιστρέφουμε το response αντί για throw για να μην "σκάσει" η κονσόλα πριν το alert
+    }
+
+    return response;
+}
 /* ============================================================ ΦΟΡΤΩΣΗ ΔΕΔΟΜΕΝΩΝ ============================================================ */
 // Λήψη και εμφάνιση συνολικού πλήθους αποφοίτων (Endpoint #3)
 async function loadAlumniCount() {
@@ -176,10 +206,9 @@ async function drawChart() {
         // Εδώ ορίζουμε τα options ξεχωριστά για να είναι πιο εύκολο να γίνει κάποια αλλαγή
         const options = {
             pieHole: 0.4,
-            chartArea: { width: '90%', height: '75%', top: 10, bottom: 40 },
+            chartArea: { width: '100%', height: '85%', top: 10, bottom: 20 },
             legend: { position: 'bottom', textStyle: { fontSize: 10 } },
             backgroundColor: 'transparent',
-            height: 250
         };
 
         const chart = new google.visualization.PieChart(document.getElementById('chart_div'));        
@@ -313,9 +342,8 @@ async function loadMyJobData() {
     if (!token) return;
 
     try {
-        const response = await fetch('api/v1/jobs/myjob', {
+        const response = await authorizedFetch('api/v1/jobs/myjob', {
             method: 'GET',
-            headers: { 'Authorization': 'Bearer ' + token }
         });
 
         if (response.ok) {
@@ -347,12 +375,6 @@ async function loadMyJobData() {
 
 // --- Αποθήκευση / Ενημέρωση Εργασίας (Endpoint #7) - Αν ο χρήστης έχει ήδη εργασία -> UPDATE, αλλιώς -> INSERT ---
 async function saveJob() {
-    const token = localStorage.getItem('adminToken');
-
-    if (!token) {
-        alert("Δεν είστε συνδεδεμένοι! Token not found.");
-        return;
-    }
 
     // Συλλογή δεδομένων φόρμας
     const jobData = {
@@ -369,21 +391,20 @@ async function saveJob() {
         return;
     }
     
-    const response = await fetch('api/v1/jobs', {
-        method: 'PUT',
-        headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}` 
-        },
-        body: JSON.stringify(jobData)
-    });
+    try {
+            const response = await authorizedFetch('api/v1/jobs', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(jobData)
+            });
 
-    if (response.ok) {
-        alert("Η εργασία σας αποθηκεύτηκε επιτυχώς!");
-        location.reload();
-    } else {
-        alert("Σφάλμα κατά την αποθήκευση. Βεβαιωθείτε ότι είστε συνδεδεμένοι.");
-    }
+            if (response.ok) {
+                alert("Η εργασία σας αποθηκεύτηκε επιτυχώς!");
+                location.reload();
+            }
+        } catch (error) {
+            console.error("Save job error:", error);
+        }
 }
 
 // --- Διαγραφή Εργασίας (Endpoint #6) ---
@@ -396,9 +417,8 @@ async function deleteJob() {
     if (!confirm("Είστε σίγουροι για τη διαγραφή της εργασίας σας;")) return;
     
     const token = localStorage.getItem('adminToken');
-    const response = await fetch('api/v1/jobs', {
-        method: 'DELETE',
-        headers: { 'Authorization': 'Bearer ' + token }
+    const response = await authorizedFetch('api/v1/jobs', {
+        method: 'DELETE'
     });
 
     if (response.ok) {
